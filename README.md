@@ -22,52 +22,60 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
+# VancedStream
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+VancedStream es una API construida con [NestJS](https://nestjs.com/) que permite hacer streaming de archivos de video directamente desde enlaces magnet de torrents, utilizando [WebTorrent](https://webtorrent.io/).
 
-## Installation
+## Características
 
-```bash
-$ npm install
-```
+- **Streaming de video**: Transmite archivos de video (`.mp4`, `.mkv`, `.webm`, `.avi`) directamente desde un torrent.
+- **Soporte de rangos**: Compatible con peticiones HTTP Range para reproducción progresiva.
+- **Gestión automática de torrents**: Descarga, mantiene y elimina torrents automáticamente según su uso.
+- **API sencilla**: Solo necesitas un enlace magnet para comenzar a reproducir.
 
-## Running the app
-
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Test
+## Instalación
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm install
 ```
 
-## Support
+## Uso
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Ejecutar en desarrollo
 
-## Stay in touch
+```bash
+npm run start:dev
+```
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### Ejecutar en producción
 
-## License
+```bash
+npm run start:prod
+```
 
-Nest is [MIT licensed](LICENSE).
+## Endpoints
+
+### `GET /?magnet=<MAGNET>&range=<RANGE>`
+
+- **magnet**: (obligatorio) Enlace magnet del torrent.
+- **range**: (opcional) Cabecera HTTP Range para streaming parcial.
+
+#### Ejemplo de uso
+
+```http
+GET /?magnet=magnet:?xt=urn:btih:... HTTP/1.1
+Range: bytes=0-1048575
+```
+
+La respuesta será un stream del archivo de video encontrado en el torrent.
+
+## Estructura principal
+
+- `src/app.controller.ts`: Controlador principal, expone el endpoint de streaming.
+- `src/app.service.ts`: Lógica de gestión de torrents.
+- `src/stream.service.ts`: Lógica de streaming y manejo de archivos.
+- `src/torrent.service.ts`: Servicio alternativo para gestión de torrents (no usado por defecto).
+
+## Licencia
+
+MIT
