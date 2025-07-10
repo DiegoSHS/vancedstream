@@ -30,11 +30,6 @@ export class AppController {
     const fileSize = file.length;
     const { data: { start, end } } = this.streamService.getChunkRange(range, fileSize);
     console.log(`[STREAM] Range request: ${range} => start: ${start}, end: ${end}, chunk: ${end - start + 1} bytes`);
-    // Prioriza la descarga del rango solicitado
-    if (typeof file.deselect === 'function' && typeof file.select === 'function') {
-      file.deselect();
-      file.select();
-    }
     const { data: ext } = this.streamService.getFileExtension(file);
     const { data: mimeType } = this.streamService.getMimeType(ext);
     const { data: stream } = this.streamService.createFileStream(file, start, end);

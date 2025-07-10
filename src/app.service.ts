@@ -95,17 +95,15 @@ export class AppService {
   removeTorrent(magnet: string): void {
     const torrent = this.client.get(magnet);
     if (torrent) {
-      // Intenta borrar archivos temporales del disco
       const files = torrent.files?.map(f => f.path) || [];
       this.client.remove(magnet, {}, (err) => {
         if (err) this.logger.error('Error removing torrent', err);
         else this.logger.log('Torrent removed successfully');
-        // Borra archivos del disco
         for (const filePath of files) {
           try {
             fs.unlinkSync(filePath);
           } catch (e) {
-            // Puede fallar si el archivo ya no existe
+            this.logger.warn(`Failed to delete file ${filePath}: ${e.message}`);
           }
         }
       });

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createReadStream } from 'fs';
 import { Torrent, TorrentFile } from 'webtorrent';
 
 interface ServiceResult<T> {
@@ -50,10 +51,18 @@ export class StreamService {
 
     createFileStream(file: TorrentFile, start: number, end: number): ServiceResult<NodeJS.ReadableStream> {
         try {
-            const stream = file.createReadStream({ start, end });
-            return { data: stream, error: null };
+            if (
+                file.downloaded === file.length &&
+                typeof file.path === 'string' &&
+                file.path.length > 0
+            ) {
+                const data = createReadStream(file.path, { start, end });
+                return { data, error: null };
+            }
+            const data = file.createReadStream({ start, end });
+            return { data, error: null };
         } catch (e: any) {
-            return { data: null, error: 'Error creando el stream del archivo' };
+            return { data: null, error: e?.message || 'Error creando el stream del archivo' };
         }
     }
 
