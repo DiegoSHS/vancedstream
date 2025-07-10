@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 // @ts-ignore
 import WebTorrent, { Torrent } from 'webtorrent';
+import * as fs from 'fs';
 
 interface TorrentUsage {
   lastUsed: number;
@@ -8,10 +9,13 @@ interface TorrentUsage {
 
 @Injectable()
 export class AppService {
-  private usageMap: Map<string, TorrentUsage> = new Map()
-  private readonly cleanupInterval = setInterval(() => this.cleanupOldTorrents(), 2 * 60 * 1000);
-  private readonly client = new WebTorrent()
-  private readonly expiration: number = 5 * 60 * 1000
+  private usageMap: Map<string, TorrentUsage> = new Map();
+  // Limpieza cada 1 minuto
+  private readonly cleanupInterval = setInterval(() => this.cleanupOldTorrents(), 60 * 1000);
+  // Limita conexiones para reducir buffers
+  private readonly client = new WebTorrent({ maxConns: 20 });
+  // Expira torrents en 2 minutos
+  private readonly expiration: number = 2 * 60 * 1000;
 
   constructor(
     private readonly logger: Logger = new Logger(AppService.name)
@@ -35,6 +39,13 @@ export class AppService {
     return new Promise((resolve, reject) => {
       this.client.add(magnet, {
         strategy: 'sequential',
+        announce: [
+          'udp://tracker.openbittorrent.com:80',
+          'udp://tracker.opentrackr.org:1337',
+          'udp://tracker.coppersurfer.tk:6969',
+          'udp://tracker.leechers-paradise.org:6969',
+          'udp://tracker.internetwarriors.net:1337'
+        ]
       }, (torrent) => {
         this.logger.log(`Torrent added and ready: ${torrent.infoHash}`);
         this.markTorrentAsUsed(magnet);
@@ -82,14 +93,24 @@ export class AppService {
   }
 
   /**
-   * Elimina un torrent del cliente y del usageMap.
+   * Elimina un torrent del cliente y del usageMap, y borra archivos temporales.
    */
   removeTorrent(magnet: string): void {
     const torrent = this.client.get(magnet);
     if (torrent) {
+      // Intenta borrar archivos temporales del disco
+      const files = torrent.files?.map(f => f.path) || [];
       this.client.remove(magnet, {}, (err) => {
         if (err) this.logger.error('Error removing torrent', err);
         else this.logger.log('Torrent removed successfully');
+        // Borra archivos del disco
+        for (const filePath of files) {
+          try {
+            fs.unlinkSync(filePath);
+          } catch (e) {
+            // Puede fallar si el archivo ya no existe
+          }
+        }
       });
     }
     this.usageMap.delete(magnet);
