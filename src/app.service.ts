@@ -10,11 +10,8 @@ interface TorrentUsage {
 @Injectable()
 export class AppService {
   private usageMap: Map<string, TorrentUsage> = new Map();
-  // Limpieza cada 1 minuto
   private readonly cleanupInterval = setInterval(() => this.cleanupOldTorrents(), 60 * 1000);
-  // Limita conexiones para reducir buffers
   private readonly client = new WebTorrent({ maxConns: 20 });
-  // Expira torrents en 2 minutos
   private readonly expiration: number = 2 * 60 * 1000;
 
   constructor(
