@@ -51,14 +51,6 @@ export class StreamService {
 
     createFileStream(file: TorrentFile, start: number, end: number): ServiceResult<NodeJS.ReadableStream> {
         try {
-            if (
-                file.downloaded === file.length &&
-                typeof file.path === 'string' &&
-                file.path.length > 0
-            ) {
-                const data = createReadStream(file.path, { start, end });
-                return { data, error: null };
-            }
             const data = file.createReadStream({ start, end });
             return { data, error: null };
         } catch (e: any) {
