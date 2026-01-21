@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Torrent, TorrentFile } from 'webtorrent';
-import { FileMetadataService } from './file-metadata.service.js';
-import { RangeParserService } from './range-parser.service.js';
-import { ProgressiveBufferService } from './progressive-buffer.service.js';
-import { StreamCreatorService } from './stream-creator.service.js';
+import type { StreamMetadata } from '../common/types';
+import { FileMetadataService } from './file-metadata.service';
+import { RangeParserService } from './range-parser.service';
+import { ProgressiveBufferService } from './progressive-buffer.service';
+import { StreamCreatorService } from './stream-creator.service';
 
 /**
  * StreamService
@@ -21,18 +22,10 @@ export class StreamService {
   /**
    * Get complete stream metadata for standard (non-progressive) streaming
    */
-  getStreamMetadata(torrent: Torrent, rangeHeader: string | undefined): {
-    error: string | null;
-    data: {
-      file: TorrentFile;
-      fileSize: number;
-      start: number;
-      end: number;
-      fileName: string;
-      mimeType: string;
-      chunkSize: number;
-    } | null;
-  } {
+  getStreamMetadata(
+    torrent: Torrent,
+    rangeHeader: string | undefined,
+  ): { error: string | null; data: StreamMetadata | null } {
     try {
       const file = this.fileMetadata.findVideoFile(torrent);
       const { ext, fileName, fileSize, mimeType } = this.fileMetadata.getFileMetadata(file);
@@ -41,17 +34,19 @@ export class StreamService {
         fileSize
       );
 
+      const metadata: StreamMetadata = {
+        file,
+        fileSize,
+        start,
+        end,
+        fileName,
+        mimeType,
+        chunkSize: end - start + 1,
+      };
+
       return {
         error: null,
-        data: {
-          file,
-          fileSize,
-          start,
-          end,
-          fileName,
-          mimeType,
-          chunkSize: end - start + 1,
-        },
+        data: metadata,
       };
     } catch (error: any) {
       return {
@@ -67,20 +62,8 @@ export class StreamService {
    */
   async getStreamWithProgressiveLoading(
     torrent: Torrent,
-    rangeHeader: string | undefined
-  ): Promise<{
-    error: string | null;
-    data: {
-      file: TorrentFile;
-      fileSize: number;
-      start: number;
-      end: number;
-      fileName: string;
-      mimeType: string;
-      chunkSize: number;
-      isProgressive: boolean;
-    } | null;
-  }> {
+    rangeHeader: string | undefined,
+  ): Promise<{ error: string | null; data: StreamMetadata | null }> {
     try {
       const file = this.fileMetadata.findVideoFile(torrent);
       const { ext, fileName, fileSize, mimeType } = this.fileMetadata.getFileMetadata(file);
@@ -102,18 +85,20 @@ export class StreamService {
         );
       }
 
+      const metadata: StreamMetadata = {
+        file,
+        fileSize,
+        start,
+        end,
+        fileName,
+        mimeType,
+        chunkSize: end - start + 1,
+        isProgressive: true,
+      };
+
       return {
         error: null,
-        data: {
-          file,
-          fileSize,
-          start,
-          end,
-          fileName,
-          mimeType,
-          chunkSize: end - start + 1,
-          isProgressive: true,
-        },
+        data: metadata,
       };
     } catch (error: any) {
       return {

@@ -1,11 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
-// @ts-ignore
+import { Injectable } from '@nestjs/common';
+import { unlinkSync } from 'fs';
+import { LoggerService } from 'src/common/logger/logger.service';
 import WebTorrent, { Torrent } from 'webtorrent';
-import * as fs from 'fs';
 
-interface TorrentUsage {
-  lastUsed: number;
+interface TorrentUsageEntry {
+  lastUsedAt: number;
 }
+
+const TORRENT_CLEANUP_INTERVAL_MS = 60 * 1000;
+const TORRENT_EXPIRATION_MS = 2 * 60 * 1000;
+const TORRENT_READY_TIMEOUT_MS = 60 * 1000;
 
 /**
  * TorrentService
@@ -13,16 +17,16 @@ interface TorrentUsage {
  */
 @Injectable()
 export class TorrentService {
-  private usageMap: Map<string, TorrentUsage> = new Map();
-  private readonly cleanupInterval = setInterval(() => this.cleanupOldTorrents(), 60 * 1000);
+  private readonly usageMap: Map<string, TorrentUsageEntry> = new Map();
+  private readonly cleanupInterval = setInterval(
+    () => this.cleanupOldTorrents(),
+    TORRENT_CLEANUP_INTERVAL_MS,
+  );
   private readonly client = new WebTorrent({ maxConns: 20 });
-  private readonly expiration: number = 2 * 60 * 1000;
 
-  constructor(
-    private readonly logger: Logger = new Logger(TorrentService.name)
-  ) {
+  constructor(private readonly logger: LoggerService) {
     this.client.on('error', (err: Error) => {
-      this.logger.error('WebTorrent client error:', err);
+      this.logger.error('WebTorrent client error', err, 'TorrentService');
     });
   }
 
@@ -49,7 +53,7 @@ export class TorrentService {
           'udp://tracker.internetwarriors.net:1337'
         ]
       }, (torrent) => {
-        this.logger.log(`Torrent added and ready: ${torrent.infoHash}`);
+        this.logger.info(`Torrent added and ready: ${torrent.infoHash}`);
         this.markTorrentAsUsed(magnet);
         torrent.on('error', (err: Error) => {
           this.logger.error('Torrent error:', err);
@@ -70,7 +74,12 @@ export class TorrentService {
     if (torrent) return torrent;
     return await Promise.race([
       this.addTorrent(magnet),
-      new Promise<Torrent>((_, reject) => setTimeout(() => reject(new Error('Timeout: Torrent not ready')), 60000))
+      new Promise<Torrent>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Timeout: Torrent not ready')),
+          TORRENT_READY_TIMEOUT_MS,
+        ),
+      ),
     ]);
   }
 
@@ -78,7 +87,7 @@ export class TorrentService {
    * Mark torrent as used (update timestamp in usageMap)
    */
   markTorrentAsUsed(magnet: string) {
-    this.usageMap.set(magnet, { lastUsed: Date.now() });
+    this.usageMap.set(magnet, { lastUsedAt: Date.now() });
   }
 
   /**
@@ -87,8 +96,8 @@ export class TorrentService {
   cleanupOldTorrents() {
     const now = Date.now();
     for (const [magnet, usage] of this.usageMap.entries()) {
-      if (now - usage.lastUsed > this.expiration) {
-        this.logger.log(`Cleaning up expired torrent: ${magnet}`);
+      if (now - usage.lastUsedAt > TORRENT_EXPIRATION_MS) {
+        this.logger.info(`Cleaning up expired torrent: ${magnet}`, 'TorrentService');
         this.removeTorrent(magnet);
       }
     }
@@ -102,13 +111,16 @@ export class TorrentService {
     if (torrent) {
       const files = torrent.files?.map(f => f.path) || [];
       this.client.remove(magnet, {}, (err) => {
-        if (err) this.logger.error('Error removing torrent', err);
-        else this.logger.log('Torrent removed successfully');
+        if (err) {
+          this.logger.error('Error removing torrent', err, 'TorrentService');
+        } else {
+          this.logger.info('Torrent removed successfully', 'TorrentService');
+        }
         for (const filePath of files) {
           try {
-            fs.unlinkSync(filePath);
+            unlinkSync(filePath);
           } catch (e) {
-            this.logger.warn(`Failed to delete file ${filePath}: ${e.message}`);
+            this.logger.warn(`Failed to delete file ${filePath}`, 'TorrentService');
           }
         }
       });

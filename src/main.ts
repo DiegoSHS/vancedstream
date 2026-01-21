@@ -1,9 +1,6 @@
-// @ts-ignore
 import { NestFactory } from '@nestjs/core';
-// @ts-ignore
-import { AppModule } from './app.module.js';
-// @ts-ignore
 import { FastifyAdapter } from '@nestjs/platform-fastify';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(

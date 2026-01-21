@@ -3,6 +3,7 @@ import { Readable } from 'stream';
 import { TorrentService } from './torrent/torrent.service.js';
 import { StreamService } from './stream/stream.service.js';
 import { Torrent } from 'webtorrent';
+import { LoggerService } from './common/logger/logger.service';
 
 /**
  * AppController
@@ -13,6 +14,7 @@ export class AppController {
   constructor(
     private readonly torrentService: TorrentService,
     private readonly streamService: StreamService,
+    private readonly logger: LoggerService,
   ) { }
 
   /**
@@ -38,7 +40,10 @@ export class AppController {
       const startTime = Date.now();
 
       // Step 1: Get or add torrent with progressive mode
-      console.log(`[STREAM] Starting ${enableProgressive ? 'progressive' : 'standard'} stream for magnet...`);
+      this.logger.info(
+        `Starting ${enableProgressive ? 'progressive' : 'standard'} stream for magnet`,
+        'AppController',
+      );
       const torrent: Torrent = await this.torrentService.getOrAddTorrent(magnet);
       const getOrAddTime = Date.now() - startTime;
 
@@ -54,7 +59,10 @@ export class AppController {
           return { message: progError || 'Failed to setup progressive stream' };
         }
         metadata = progMetadata;
-        console.log(`[STREAM] Progressive buffer ready in ${Date.now() - startTime}ms (get-or-add: ${getOrAddTime}ms)`);
+        this.logger.info(
+          `Progressive buffer ready in ${Date.now() - startTime}ms (get-or-add: ${getOrAddTime}ms)`,
+          'AppController',
+        );
       } else {
         // Standard: uses old method
         const { data: stdMetadata, error: stdError } = this.streamService.getStreamMetadata(torrent, range);
@@ -77,13 +85,14 @@ export class AppController {
       }
 
       const totalTime = Date.now() - startTime;
-      console.log(
-        `[STREAM] ${enableProgressive ? '✓ PROGRESSIVE' : 'STANDARD'} | ` +
+      this.logger.info(
+        `${enableProgressive ? '✓ PROGRESSIVE' : 'STANDARD'} | ` +
         `Range: ${range || 'initial'} | ` +
         `start: ${metadata.start}, end: ${metadata.end}, ` +
         `chunk: ${metadata.chunkSize} bytes | ` +
         `file: ${metadata.fileName} | ` +
-        `Total time: ${totalTime}ms`
+        `Total time: ${totalTime}ms`,
+        'AppController',
       );
 
       return new StreamableFile(stream as Readable, {
@@ -92,7 +101,7 @@ export class AppController {
         length: metadata.fileSize,
       });
     } catch (error: any) {
-      console.error('[STREAM ERROR]', error);
+      this.logger.error('Stream error', error, 'AppController');
       return { message: error?.message || 'Stream error' };
     }
   }

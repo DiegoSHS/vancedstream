@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { STREAM_CONFIG } from 'src/constants.js';
+import { LoggerService } from 'src/common/logger/logger.service';
+import { STREAM_CONFIG } from 'src/constants';
 import { TorrentFile } from 'webtorrent';
 
 /**
@@ -7,6 +8,7 @@ import { TorrentFile } from 'webtorrent';
  */
 @Injectable()
 export class ProgressiveBufferService {
+    constructor(private readonly logger: LoggerService) { }
     /**
      * Wait for initial buffer to be available for streaming
      * Monitors file.downloaded property until threshold is reached or timeout
@@ -29,9 +31,10 @@ export class ProgressiveBufferService {
                 // Buffer ready
                 if (downloaded >= endByte) {
                     clearInterval(intervalId);
-                    console.log(
+                    this.logger.info(
                         `[PROGRESSIVE] Buffer ready in ${elapsed}ms. ` +
-                        `Downloaded: ${(downloaded / (1024 * 1024)).toFixed(2)} MB`
+                        `Downloaded: ${(downloaded / (1024 * 1024)).toFixed(2)} MB`,
+                        'ProgressiveBufferService',
                     );
                     resolve({ ready: true, downloadedBytes: downloaded, elapsedMs: elapsed });
                     return;
@@ -40,10 +43,11 @@ export class ProgressiveBufferService {
                 // Timeout reached
                 if (elapsed > timeoutMs) {
                     clearInterval(intervalId);
-                    console.warn(
+                    this.logger.warn(
                         `[PROGRESSIVE] Timeout after ${elapsed}ms. ` +
                         `Downloaded: ${(downloaded / (1024 * 1024)).toFixed(2)} MB / ` +
-                        `Required: ${(bufferRequired / (1024 * 1024)).toFixed(2)} MB`
+                        `Required: ${(bufferRequired / (1024 * 1024)).toFixed(2)} MB`,
+                        'ProgressiveBufferService',
                     );
                     resolve({ ready: false, downloadedBytes: downloaded, elapsedMs: elapsed });
                     return;
@@ -69,8 +73,9 @@ export class ProgressiveBufferService {
 
                 if (file.downloaded >= endByte + 1) {
                     clearInterval(intervalId);
-                    console.log(
-                        `[PROGRESSIVE] Byte range ready (${endByte} bytes) in ${elapsed}ms`
+                    this.logger.info(
+                        `[PROGRESSIVE] Byte range ready (${endByte} bytes) in ${elapsed}ms`,
+                        'ProgressiveBufferService',
                     );
                     resolve({ available: true, elapsedMs: elapsed });
                     return;
@@ -78,7 +83,10 @@ export class ProgressiveBufferService {
 
                 if (elapsed > timeoutMs) {
                     clearInterval(intervalId);
-                    console.warn(`[PROGRESSIVE] Timeout waiting for byte ${endByte}`);
+                    this.logger.warn(
+                        `[PROGRESSIVE] Timeout waiting for byte ${endByte}`,
+                        'ProgressiveBufferService',
+                    );
                     resolve({ available: false, elapsedMs: elapsed });
                 }
             }, checkInterval);
