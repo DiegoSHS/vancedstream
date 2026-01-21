@@ -1,42 +1,99 @@
-import { Controller, Get, Query, StreamableFile } from '@nestjs/common';
+import { Controller, Get, Headers, Query, StreamableFile } from '@nestjs/common';
 import { Readable } from 'stream';
-// @ts-ignore
-import { AppService } from './app.service.js';
-import { StreamService } from './stream.service.js';
+import { TorrentService } from './torrent/torrent.service.js';
+import { StreamService } from './stream/stream.service.js';
 import { Torrent } from 'webtorrent';
 
+/**
+ * AppController
+ * Responsibility: Handle HTTP requests for video streaming
+ */
 @Controller()
 export class AppController {
   constructor(
-    private readonly appService: AppService,
+    private readonly torrentService: TorrentService,
     private readonly streamService: StreamService,
   ) { }
 
+  /**
+   * GET / - Stream video from torrent
+   * Query params:
+   *   - magnet: Magnet link (required)
+   *   - progressive: Enable progressive buffering (default: true)
+   * Headers:
+   *   - Range: Byte range for partial content
+   */
   @Get()
   async stream(
     @Query('magnet') magnet: string,
-    @Query('range') range?: string,
+    @Query('progressive') progressive: string = 'true',
+    @Headers() headers,
   ) {
     if (!magnet) {
       return { message: 'Magnet link is required' };
     }
 
-    const torrent: Torrent = await this.appService.getOrAddTorrent(magnet);
-    const { data: file, error: fileError } = this.streamService.getVideoFile(torrent);
-    if (fileError || !file) {
-      return { message: fileError || 'No video file found in the torrent' };
-    }
+    try {
+      const enableProgressive = progressive !== 'false';
+      const startTime = Date.now();
 
-    const fileSize = file.length;
-    const { data: { start, end } } = this.streamService.getChunkRange(range, fileSize);
-    console.log(`[STREAM] Range request: ${range} => start: ${start}, end: ${end}, chunk: ${end - start + 1} bytes`);
-    const { data: ext } = this.streamService.getFileExtension(file);
-    const { data: mimeType } = this.streamService.getMimeType(ext);
-    const { data: stream } = this.streamService.createFileStream(file, start, end);
-    return new StreamableFile(stream as Readable, {
-      type: mimeType,
-      disposition: `inline; filename="${file.name}"`,
-      length: fileSize,
-    });
+      // Step 1: Get or add torrent with progressive mode
+      console.log(`[STREAM] Starting ${enableProgressive ? 'progressive' : 'standard'} stream for magnet...`);
+      const torrent: Torrent = await this.torrentService.getOrAddTorrent(magnet);
+      const getOrAddTime = Date.now() - startTime;
+
+      // Step 2: Get stream metadata
+      const range = headers.range?.toString();
+      let metadata;
+
+      if (enableProgressive) {
+        // Progressive: returns immediately when buffer is ready
+        const { data: progMetadata, error: progError } = await this.streamService.getStreamWithProgressiveLoading(torrent, range);
+
+        if (progError || !progMetadata) {
+          return { message: progError || 'Failed to setup progressive stream' };
+        }
+        metadata = progMetadata;
+        console.log(`[STREAM] Progressive buffer ready in ${Date.now() - startTime}ms (get-or-add: ${getOrAddTime}ms)`);
+      } else {
+        // Standard: uses old method
+        const { data: stdMetadata, error: stdError } = this.streamService.getStreamMetadata(torrent, range);
+
+        if (stdError || !stdMetadata) {
+          return { message: stdError || 'Failed to get stream metadata' };
+        }
+        metadata = stdMetadata;
+      }
+
+      // Step 3: Create and return stream immediately
+      const { data: stream, error: streamError } = this.streamService.createFileStream(
+        metadata.file,
+        metadata.start,
+        metadata.end
+      );
+
+      if (streamError || !stream) {
+        return { message: streamError || 'Failed to create file stream' };
+      }
+
+      const totalTime = Date.now() - startTime;
+      console.log(
+        `[STREAM] ${enableProgressive ? '✓ PROGRESSIVE' : 'STANDARD'} | ` +
+        `Range: ${range || 'initial'} | ` +
+        `start: ${metadata.start}, end: ${metadata.end}, ` +
+        `chunk: ${metadata.chunkSize} bytes | ` +
+        `file: ${metadata.fileName} | ` +
+        `Total time: ${totalTime}ms`
+      );
+
+      return new StreamableFile(stream as Readable, {
+        type: metadata.mimeType,
+        disposition: `inline; filename="${metadata.fileName}"`,
+        length: metadata.fileSize,
+      });
+    } catch (error: any) {
+      console.error('[STREAM ERROR]', error);
+      return { message: error?.message || 'Stream error' };
+    }
   }
 }

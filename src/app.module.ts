@@ -1,12 +1,12 @@
 import { Logger, Module } from '@nestjs/common';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
-import { StreamService } from './stream.service.js';
 import { ConfigModule } from '@nestjs/config';
+import { AppController } from './app.controller';
+import { StreamModule } from './stream/stream.module';
+import { TorrentModule } from './torrent/torrent.module';
 
 @Module({
-  imports: [ConfigModule.forRoot()],
+  imports: [ConfigModule.forRoot(), StreamModule, TorrentModule],
   controllers: [AppController],
-  providers: [AppService, Logger, StreamService],
+  providers: [Logger],
 })
 export class AppModule { }
