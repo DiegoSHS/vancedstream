@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { LoggerService } from 'src/common/logger/logger.service';
-import { STREAM_CONFIG } from 'src/constants';
+import { LoggerService } from '../common/logger/logger.service.js';
+import { STREAM_CONFIG } from '../constants.js';
 import { TorrentFile } from 'webtorrent';
 
 /**

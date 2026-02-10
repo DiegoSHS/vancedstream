@@ -3,7 +3,7 @@ import { Readable } from 'stream';
 import { TorrentService } from './torrent/torrent.service.js';
 import { StreamService } from './stream/stream.service.js';
 import { Torrent } from 'webtorrent';
-import { LoggerService } from './common/logger/logger.service';
+import { LoggerService } from './common/logger/logger.service.js';
 
 /**
  * AppController

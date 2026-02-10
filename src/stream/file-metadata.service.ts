@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { STREAM_CONFIG } from 'src/constants';
+import { STREAM_CONFIG } from '../constants.js';
 import { Torrent, TorrentFile } from 'webtorrent';
 
 /**

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { TorrentService } from './torrent.service';
-import { LoggerService } from 'src/common/logger/logger.service';
+import { TorrentService } from './torrent.service.js';
+import { LoggerService } from '../common/logger/logger.service.js';
 
 @Module({
   providers: [TorrentService, LoggerService],

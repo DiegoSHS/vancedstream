@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Torrent, TorrentFile } from 'webtorrent';
 import type { StreamMetadata } from '../common/types';
-import { FileMetadataService } from './file-metadata.service';
-import { RangeParserService } from './range-parser.service';
-import { ProgressiveBufferService } from './progressive-buffer.service';
-import { StreamCreatorService } from './stream-creator.service';
+import { FileMetadataService } from './file-metadata.service.js';
+import { RangeParserService } from './range-parser.service.js';
+import { ProgressiveBufferService } from './progressive-buffer.service.js';
+import { StreamCreatorService } from './stream-creator.service.js';
 
 /**
  * StreamService

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { unlinkSync } from 'fs';
-import { LoggerService } from 'src/common/logger/logger.service';
+import { LoggerService } from '../common/logger/logger.service.js';
 import WebTorrent, { Torrent } from 'webtorrent';
 
 interface TorrentUsageEntry {
@@ -25,7 +25,7 @@ export class TorrentService {
   private readonly client = new WebTorrent({ maxConns: 20 });
 
   constructor(private readonly logger: LoggerService) {
-    this.client.on('error', (err: Error) => {
+    this.client.on('error', (err) => {
       this.logger.error('WebTorrent client error', err, 'TorrentService');
     });
   }
@@ -55,8 +55,8 @@ export class TorrentService {
       }, (torrent) => {
         this.logger.info(`Torrent added and ready: ${torrent.infoHash}`);
         this.markTorrentAsUsed(magnet);
-        torrent.on('error', (err: Error) => {
-          this.logger.error('Torrent error:', err);
+        torrent.on('error', (err) => {
+          this.logger.error('Torrent error:', err, 'TorrentService');
           reject(err);
         });
         resolve(torrent);
@@ -106,8 +106,8 @@ export class TorrentService {
   /**
    * Remove torrent from client and usageMap, delete temporary files
    */
-  removeTorrent(magnet: string): void {
-    const torrent = this.client.get(magnet);
+  async removeTorrent(magnet: string) {
+    const torrent = await this.client.get(magnet);
     if (torrent) {
       const files = torrent.files?.map(f => f.path) || [];
       this.client.remove(magnet, {}, (err) => {
