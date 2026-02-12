@@ -34,8 +34,8 @@ export class TorrentService {
   /**
    * Get existing torrent by magnet link, or null if not exists
    */
-  async getTorrent(magnet: string): Promise<Torrent | null> {
-    return this.client.get(magnet) || null;
+  async getTorrent(magnet: string): Promise<Torrent> {
+    return this.client.get(magnet);
   }
 
   /**
