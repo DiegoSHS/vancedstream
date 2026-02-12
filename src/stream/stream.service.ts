@@ -20,47 +20,10 @@ export class StreamService {
   ) { }
 
   /**
-   * Get complete stream metadata for standard (non-progressive) streaming
+   * Obtener metadatos de streaming optimizados para archivos grandes
+   * Siempre espera un buffer inicial razonable antes de devolver los datos
    */
-  getStreamMetadata(
-    torrent: Torrent,
-    rangeHeader: string | undefined,
-  ): { error: string | null; data: StreamMetadata | null } {
-    try {
-      const file = this.fileMetadata.findVideoFile(torrent);
-      const { ext, fileName, fileSize, mimeType } = this.fileMetadata.getFileMetadata(file);
-      const { start, end } = this.rangeParser.getChunkBoundaries(
-        rangeHeader,
-        fileSize
-      );
-
-      const metadata: StreamMetadata = {
-        file,
-        fileSize,
-        start,
-        end,
-        fileName,
-        mimeType,
-        chunkSize: end - start + 1,
-      };
-
-      return {
-        error: null,
-        data: metadata,
-      };
-    } catch (error: any) {
-      return {
-        data: null,
-        error: error?.message || 'Error obtaining stream metadata',
-      };
-    }
-  }
-
-  /**
-   * Get stream metadata with progressive buffer support
-   * Waits for initial buffer before returning
-   */
-  async getStreamWithProgressiveLoading(
+  async getStreamMetadata(
     torrent: Torrent,
     rangeHeader: string | undefined,
   ): Promise<{ error: string | null; data: StreamMetadata | null }> {

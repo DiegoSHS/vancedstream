@@ -7,9 +7,10 @@ interface TorrentUsageEntry {
   lastUsedAt: number;
 }
 
-const TORRENT_CLEANUP_INTERVAL_MS = 60 * 1000;
-const TORRENT_EXPIRATION_MS = 2 * 60 * 1000;
-const TORRENT_READY_TIMEOUT_MS = 60 * 1000;
+// Limpieza cada minuto, pero expiración pensada para sesiones largas (~1h)
+const TORRENT_CLEANUP_INTERVAL_MS = 60 * 1000;      // 1 minuto
+const TORRENT_EXPIRATION_MS = 60 * 60 * 1000;       // 60 minutos
+const TORRENT_READY_TIMEOUT_MS = 60 * 1000;         // 60 segundos para que el torrent esté listo
 
 /**
  * TorrentService
@@ -22,7 +23,7 @@ export class TorrentService {
     () => this.cleanupOldTorrents(),
     TORRENT_CLEANUP_INTERVAL_MS,
   );
-  private readonly client = new WebTorrent({ maxConns: 20 });
+  private readonly client = new WebTorrent({ maxConns: 40 });
 
   constructor(private readonly logger: LoggerService) {
     this.client.on('error', (err) => {
@@ -46,19 +47,13 @@ export class TorrentService {
       this.client.add(magnet, {
         strategy: 'sequential',
         announce: [
-          'udp://tracker.openbittorrent.com:80',
           'udp://tracker.opentrackr.org:1337',
-          'udp://tracker.coppersurfer.tk:6969',
-          'udp://tracker.leechers-paradise.org:6969',
-          'udp://tracker.internetwarriors.net:1337'
+          'udp://opentor.org:2710',
+          'udp://open.stealth.si:80',
         ]
       }, (torrent) => {
         this.logger.info(`Torrent added and ready: ${torrent.infoHash}`);
         this.markTorrentAsUsed(magnet);
-        torrent.on('error', (err) => {
-          this.logger.error('Torrent error:', err, 'TorrentService');
-          reject(err);
-        });
         resolve(torrent);
       });
     });

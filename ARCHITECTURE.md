@@ -7,7 +7,7 @@
 │                      Cliente HTTP (Video Player)                    │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 |
-                    GET /?magnet=xxx&progressive=true
+                    GET /?magnet=xxx
                     Headers: Range: bytes=0-1048575
                                 |
                                 v
@@ -41,8 +41,7 @@
                                 | Torrent object
                                 v
             ┌────────────────────────────────────────┐
-            | 2. getStreamMetadata() o               |
-            |    getStreamWithProgressiveLoading()   |
+            | 2. getStreamMetadata()                 |
             v                                        |
 ┌─────────────────────────────────────────────────────────────┐
 │                   StreamService                             │
@@ -59,16 +58,17 @@
      v          v              v                |
 ┌────────────────────────────────────────────┐  |
 │         STREAM_CONFIG (constants.ts)       │  |
-│  - chunkSizes (512KB - 4MB dinámico)       │  |
+│  - chunkSizes (1MB - 8MB dinámico)        │  |
 │  - mimeTypes (.mp4, .mkv, .webm, .avi)     │  |
-│  - progressiveBufferThresholds (5MB/2MB)   │  |
+│  - progressiveBufferThresholds (hasta 20MB,│  |
+│    buffer inicial adaptativo ~2% del archivo)     │  |
 │  - patterns (regex para video y rangos)    │  |
 │  - timeouts (30s progressive)              │  |
 └────────────────────────────────────────────┘  |
      |          |              |                |
      v          v              v                |
-  findVideo  parseRange   waitForBuffer         |
-  +getMime   +getChunk    (5MB inicial)         |
+   findVideo  parseRange   waitForBuffer         |
+   +getMime   +getChunk    (buffer inicial adaptativo) |
   +getExt    Boundaries   +timeout              |
      |          |              |                |
      └──────────┴──────────────┴────────────────┘
@@ -80,7 +80,6 @@
             v                        |
 ┌─────────────────────────────────────────────────┐
 │          StreamCreatorService                   │
-│  - validateRange(start, end, fileSize)          │
 │  - file.createReadStream(start, end)            │
 └──────────────────┬──────────────────────────────┘
                    |
@@ -112,16 +111,16 @@
 
 ### Caso 1: Primera Solicitud (Sin Range Header)
 
-1. Cliente solicita: `GET /?magnet=xxx&progressive=true`
+1. Cliente solicita: `GET /?magnet=xxx`
 2. AppController valida parámetros
 3. TorrentService.getOrAddTorrent():
    - Busca torrent en caché (getTorrent)
    - Si no existe, añade con estrategia secuencial
    - Timeout: 60 segundos
-4. StreamService.getStreamWithProgressiveLoading():
+4. StreamService.getStreamMetadata():
    - FileMetadataService.findVideoFile() - Busca archivo .mp4/.mkv/.webm/.avi
    - RangeParserService.getChunkBoundaries() - Sin range header: start=0, end=chunkSize-1
-   - ProgressiveBufferService.waitForInitialBuffer() - Espera 5MB descargados o timeout 30s
+   - ProgressiveBufferService.waitForInitialBuffer() - Espera un buffer inicial adaptativo (hasta ~20MB o ~2% del archivo) o timeout 30s
 5. StreamCreatorService.createStream(file, 0, chunkSize)
 6. Return StreamableFile con Status 200
 
@@ -136,12 +135,12 @@
 4. StreamCreatorService.createStream(file, 5242880, 10485759)
 5. Return StreamableFile con Status 206 Partial Content
 
-### Caso 3: Streaming Estándar (Sin Progressive)
+### Caso 3: Reproducción reiterada / múltiples clientes
 
-1. Cliente solicita: `GET /?magnet=xxx&progressive=false`
-2. TorrentService.getOrAddTorrent() - Espera hasta 60s
-3. StreamService.getStreamMetadata() - Sin espera de buffer
-4. Retorna stream inmediatamente (puede haber rebuffering si descarga lenta)
+1. Clientes solicitan: `GET /?magnet=xxx` (con o sin Range)
+2. TorrentService.getOrAddTorrent() reutiliza el mismo torrent en memoria
+3. StreamService.getStreamMetadata() usa el mismo archivo ya descargado parcialmente
+4. La entrega es más rápida porque gran parte del archivo ya está en disco/memoria
 
 ## Estructura de Archivos
 
@@ -171,20 +170,19 @@ test/
 ## Configuración Dinámica (STREAM_CONFIG)
 
 ### Chunk Sizes Adaptativos
-- Archivos < 100MB: 512KB (móvil/baja calidad)
-- Archivos 100MB - 1GB: 1MB (calidad estándar)
-- Archivos 1GB - 5GB: 2MB (HD 720p/1080p)
-- Archivos > 5GB: 4MB (4K/UHD)
+- Archivos < 100MB: 1MB (móvil/baja calidad)
+- Archivos 100MB - 1GB: 2MB (calidad estándar)
+- Archivos 1GB - 5GB: 4MB (HD 720p/1080p)
+- Archivos > 5GB: 8MB (4K/UHD y archivos muy pesados)
 
 ### Progressive Buffer
-- Inicial: 5MB (suficiente para reproducción inmediata)
-- Mínimo: 2MB (mantener buffer durante playback)
-- Prefetch: 10MB (descarga anticipada)
+- Inicial máximo: 20MB
+- Real: buffer inicial adaptativo (~5MB hasta 20MB, alrededor del 2% del archivo)
 - Timeout: 30 segundos
 
 ### Limpieza de Torrents
 - Interval: 60 segundos (verificación automática)
-- Expiración: 2 minutos sin uso
+- Expiración: 60 minutos sin uso
 - Estrategia: Elimina archivos descargados + libera memoria
 
 ## Tecnologías Clave

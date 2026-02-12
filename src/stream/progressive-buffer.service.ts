@@ -17,7 +17,15 @@ export class ProgressiveBufferService {
         file: TorrentFile,
         requestedStart: number
     ): Promise<{ ready: boolean; downloadedBytes: number; elapsedMs: number }> {
-        const bufferRequired = STREAM_CONFIG.progressiveBufferThresholds.initial;
+        const baseRequired = STREAM_CONFIG.progressiveBufferThresholds.initial;
+        const MB = 1024 * 1024;
+        // Buffer adaptativo: mínimo 5MB, máximo `baseRequired`, y aprox. 2% del archivo
+        const adaptiveRequired = Math.min(
+            baseRequired,
+            Math.max(5 * MB, Math.floor(file.length * 0.02)),
+        );
+
+        const bufferRequired = adaptiveRequired;
         const endByte = Math.min(requestedStart + bufferRequired, file.length - 1);
         const startTime = Date.now();
         const timeoutMs = STREAM_CONFIG.timeouts.progressiveBuffer;
@@ -51,43 +59,6 @@ export class ProgressiveBufferService {
                     );
                     resolve({ ready: false, downloadedBytes: downloaded, elapsedMs: elapsed });
                     return;
-                }
-            }, checkInterval);
-        });
-    }
-
-    /**
-     * Wait for specific byte range to be available
-     */
-    async waitForByteRange(
-        file: TorrentFile,
-        endByte: number
-    ): Promise<{ available: boolean; elapsedMs: number }> {
-        const startTime = Date.now();
-        const timeoutMs = STREAM_CONFIG.timeouts.progressiveBuffer;
-        const checkInterval = STREAM_CONFIG.intervals.bufferCheck;
-
-        return new Promise((resolve) => {
-            const intervalId = setInterval(() => {
-                const elapsed = Date.now() - startTime;
-
-                if (file.downloaded >= endByte + 1) {
-                    clearInterval(intervalId);
-                    this.logger.info(
-                        `[PROGRESSIVE] Byte range ready (${endByte} bytes) in ${elapsed}ms`,
-                        'ProgressiveBufferService',
-                    );
-                    resolve({ available: true, elapsedMs: elapsed });
-                    return;
-                }
-
-                if (elapsed > timeoutMs) {
-                    clearInterval(intervalId);
-                    this.logger.warn(
-                        `[PROGRESSIVE] Timeout waiting for byte ${endByte}`,
-                        'ProgressiveBufferService',
-                    );
-                    resolve({ available: false, elapsedMs: elapsed });
                 }
             }, checkInterval);
         });

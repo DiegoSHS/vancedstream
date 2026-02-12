@@ -8,17 +8,15 @@ export const WEBTORRENT = 'WebTorrent'
 export const STREAM_CONFIG = {
     // Progressive streaming buffer thresholds
     progressiveBufferThresholds: {
-        initial: 5 * 1024 * 1024,      // 5 MB - initial buffer to start streaming
-        minimum: 2 * 1024 * 1024,      // 2 MB - minimum buffer to maintain
-        prefetch: 10 * 1024 * 1024,    // 10 MB - prefetch ahead of playback
+        initial: 20 * 1024 * 1024,     // 20 MB - límite máximo de buffer inicial (vídeos largos)
     },
 
     // Dynamic chunk sizes based on video quality
     chunkSizes: {
-        low: 1024 * 512,           // 512 KB - Mobile/Low quality
-        medium: 1024 * 1024 * 1,   // 1 MB - Standard quality (default)
-        high: 1024 * 1024 * 2,     // 2 MB - HD (720p/1080p)
-        ultra: 1024 * 1024 * 4,    // 4 MB - 4K/UHD
+        low: 1024 * 1024 * 1,      // 1 MB  - Mobile/Low quality
+        medium: 1024 * 1024 * 2,   // 2 MB  - Standard quality (default)
+        high: 1024 * 1024 * 4,     // 4 MB  - HD (720p/1080p)
+        ultra: 1024 * 1024 * 8,    // 8 MB  - 4K/UHD y vídeos muy pesados
     },
 
     // MIME types for supported video formats

@@ -16,11 +16,4 @@ export class StreamCreatorService {
     ): NodeJS.ReadableStream {
         return file.createReadStream({ start, end });
     }
-
-    /**
-     * Validate that requested range is within file bounds
-     */
-    validateRange(start: number, end: number, fileSize: number): boolean {
-        return start >= 0 && end < fileSize && start <= end;
-    }
 }
