@@ -36,8 +36,9 @@ export class TorrentService {
    */
   async getTorrent(magnet: string): Promise<Torrent | null> {
     try {
-      const torrent = await this.client.get(magnet);
-      return torrent ?? null;
+      const torrent = this.client.get(magnet);
+      if (!torrent) return null;
+      return torrent;
     } catch {
       return null;
     }
