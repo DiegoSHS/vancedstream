@@ -34,8 +34,13 @@ export class TorrentService {
   /**
    * Get existing torrent by magnet link, or null if not exists
    */
-  async getTorrent(magnet: string): Promise<Torrent> {
-    return this.client.get(magnet);
+  async getTorrent(magnet: string): Promise<Torrent | null> {
+    try {
+      const torrent = await this.client.get(magnet);
+      return torrent ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -101,8 +106,13 @@ export class TorrentService {
   /**
    * Remove torrent from client and usageMap, delete temporary files
    */
-  async removeTorrent(magnet: string) {
-    const torrent = await this.client.get(magnet);
+  async removeTorrent(magnet: string): Promise<void> {
+    let torrent: Torrent | null;
+    try {
+      torrent = await this.client.get(magnet);
+    } catch {
+      torrent = null;
+    }
     if (torrent) {
       const files = torrent.files?.map(f => f.path) || [];
       this.client.remove(magnet, {}, (err) => {
