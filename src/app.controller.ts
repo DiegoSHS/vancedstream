@@ -5,6 +5,7 @@ import { StreamService } from './stream/stream.service.js';
 import { Torrent } from 'webtorrent';
 import { LoggerService } from './common/logger/logger.service.js';
 import type { FastifyReply } from 'fastify';
+import { ThePBService } from './thepb/thepb.service.js';
 
 /**
  * AppController
@@ -16,6 +17,7 @@ export class AppController {
     private readonly torrentService: TorrentService,
     private readonly streamService: StreamService,
     private readonly logger: LoggerService,
+    private readonly TPBService: ThePBService
   ) { }
 
   /**
@@ -28,7 +30,7 @@ export class AppController {
   @Get()
   async stream(
     @Query('magnet') magnet: string,
-    @Headers() headers,
+    @Headers('range') range: string,
     @Res({ passthrough: true }) res: FastifyReply,
   ) {
     if (!magnet) {
@@ -44,7 +46,6 @@ export class AppController {
       const getOrAddTime = Date.now() - startTime;
 
       // Step 2: Get stream metadata
-      const range = headers.range?.toString();
       const { data: metadata, error: metadataError } = await this.streamService.getStreamMetadata(torrent, range);
 
       if (metadataError || !metadata) {
@@ -68,23 +69,14 @@ export class AppController {
       }
 
       // Configure HTTP status and range headers for efficient streaming
-      const isPartial = !!range;
       const chunkSize = metadata.chunkSize;
 
-      if (isPartial) {
-        res.status(206);
-        res.header('Accept-Ranges', 'bytes');
-        res.header(
-          'Content-Range',
-          `bytes ${metadata.start}-${metadata.end}/${metadata.fileSize}`,
-        );
-        res.header('Content-Length', chunkSize.toString());
-      } else {
-        res.status(200);
-        res.header('Accept-Ranges', 'bytes');
-        res.header('Content-Length', chunkSize.toString());
-      }
-
+      res.status(206);
+      res.headers({
+        "accept-ranges": "bytes",
+        "content-range": `bytes ${metadata.start}-${metadata.end}/${metadata.fileSize}`,
+        "content-length": chunkSize.toString()
+      })
       const totalTime = Date.now() - startTime;
       this.logger.info(
         `✓ STREAM | ` +
@@ -105,5 +97,12 @@ export class AppController {
       this.logger.error('Stream error', error, 'AppController');
       return { message: error?.message || 'Stream error' };
     }
+  }
+
+  @Get('/tpb_search')
+  async movies(
+    @Query('title') title: string
+  ) {
+    return this.TPBService.getTPBMovies(title)
   }
 }
