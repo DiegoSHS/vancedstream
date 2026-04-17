@@ -32,7 +32,7 @@ export class ThePBService {
         try {
             const res = await fetch(`${process.env.TPB_URL}?q=${title}&cat=207`)
             if (!res.ok) {
-                this.logger.warn(`${res.status}: ${res.statusText}`)
+                this.logger.warn(`Failed - code ${res.status}: ${res.statusText}`, "ThePBService")
                 return []
             }
             const data: TPBMovie[] = await res.json()
@@ -40,9 +40,11 @@ export class ThePBService {
                 this.logger.info("No torrents found", "ThePBService")
                 return []
             }
-            return data
+            const filtered = data
                 .map(this.TPBtoTorrent)
                 .filter(this.filterTorrents)
+            this.logger.info(`${filtered.length} torrents found`, "ThePBService")
+            return filtered
         } catch (error) {
             this.logger.warn("Error retrieving torrents", "ThePBService")
             return []
