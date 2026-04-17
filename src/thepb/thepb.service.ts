@@ -10,12 +10,12 @@ export class ThePBService {
             const res = await fetch(`${process.env.TPB_URL}?q=${title}&cat=207`)
             const data: TPBMovie[] = await res.json()
             if (!data.length) {
-                this.logger.info("[PBService] No torrents found")
+                this.logger.info("No torrents found", "ThePBService")
                 return []
             }
             return data.map(TPBtoTorrent)
         } catch (error) {
-            this.logger.warn("Error retrieving torrents")
+            this.logger.warn("Error retrieving torrents", "ThePBService")
             return []
         }
     }
