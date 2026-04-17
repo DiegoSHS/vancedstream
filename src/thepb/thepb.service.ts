@@ -31,6 +31,10 @@ export class ThePBService {
     async getTPBMovies(title: string) {
         try {
             const res = await fetch(`${process.env.TPB_URL}?q=${title}&cat=207`)
+            if (!res.ok) {
+                this.logger.warn(`${res.status}: ${res.statusText}`)
+                return []
+            }
             const data: TPBMovie[] = await res.json()
             if (!data.length) {
                 this.logger.info("No torrents found", "ThePBService")
@@ -40,7 +44,6 @@ export class ThePBService {
                 .map(this.TPBtoTorrent)
                 .filter(this.filterTorrents)
         } catch (error) {
-            console.log(error)
             this.logger.warn("Error retrieving torrents", "ThePBService")
             return []
         }
