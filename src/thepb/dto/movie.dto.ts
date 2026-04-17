@@ -1,5 +1,3 @@
-import { formatBytes, getQualityFromName, parseSeedPeers } from "../utils/thepb.utils.js";
-
 export interface Torrent {
     url: string;
     hash: string;
@@ -30,23 +28,4 @@ export interface TPBMovie {
     status: string,
     category: string,
     imdb: string
-}
-
-export const TPBtoTorrent = (input: TPBMovie): Torrent => {
-    return {
-        url: '',
-        hash: input.info_hash,
-        audio_channels: '',
-        bit_depth: '',
-        quality: getQualityFromName(input.name),
-        date_uploaded: input.added,
-        date_uploaded_unix: 0,
-        is_repack: '',
-        peers: parseSeedPeers(input.leechers),
-        seeds: parseSeedPeers(input.seeders),
-        size: formatBytes(parseInt(input.size), 1),
-        size_bytes: parseInt(input.size),
-        video_codec: '',
-        type: input.name
-    }
 }

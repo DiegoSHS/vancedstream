@@ -30,10 +30,27 @@ export class TorrentService {
       this.logger.error('WebTorrent client error', err, 'TorrentService');
     });
   }
+  extractInfo(magnetLink) {
+    const urlParams = new URLSearchParams(magnetLink.split('?')[1]);
 
+    // Extraer hash
+    const xt = urlParams.get('xt');
+    const hash = xt?.replace('urn:btih:', '') || '';
+
+    // Extraer nombre
+    const name = urlParams.get('dn') || undefined;
+
+    // Extraer trackers
+    const trackers = urlParams.getAll('tr');
+    return {
+      trackers,
+      name,
+      hash
+    }
+  }
   /**
-   * Get existing torrent by magnet link, or null if not exists
-   */
+ * Get existing torrent by magnet link, or null if not exists
+ */
   async getTorrent(magnet: string): Promise<Torrent | null> {
     try {
       const torrent = this.client.get(magnet) as unknown as Torrent | null;
@@ -47,8 +64,10 @@ export class TorrentService {
   /**
    * Add a torrent and wait for it to be ready
    * Configures sequential strategy and multiple trackers
-   */
+  */
   addTorrent(magnet: string): Promise<Torrent> {
+    const { trackers } = this.extractInfo(magnet)
+    console.log(trackers.length)
     return new Promise((resolve, reject) => {
       this.client.add(magnet, {
         strategy: 'sequential',
@@ -56,6 +75,7 @@ export class TorrentService {
           'udp://tracker.opentrackr.org:1337',
           'udp://opentor.org:2710',
           'udp://open.stealth.si:80',
+          ...trackers
         ]
       }, (torrent) => {
         this.logger.info(`Torrent added and ready: ${torrent.infoHash}`);
