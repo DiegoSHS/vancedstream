@@ -54,18 +54,18 @@ export class RangeParserService {
      * Calculate chunk boundaries for range request
      */
     getRangeChunkBoundaries(
-        rangeStart: number,
+        start: number,
         fileSize: number,
         rangeEnd?: number
     ): { start: number; end: number } {
         if (rangeEnd !== undefined) {
-            return { start: rangeStart, end: Math.min(rangeEnd, fileSize - 1) };
+            return { start, end: Math.min(rangeEnd, fileSize - 1) };
         }
 
         const chunkSize = this.getOptimalChunkSize(fileSize);
-        const end = Math.min(rangeStart + chunkSize - 1, fileSize - 1);
+        const end = Math.min(start + chunkSize - 1, fileSize - 1);
 
-        return { start: rangeStart, end };
+        return { start, end };
     }
 
     /**
