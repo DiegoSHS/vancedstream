@@ -7,10 +7,10 @@ interface TorrentUsageEntry {
   lastUsedAt: number;
 }
 
-// Limpieza cada minuto, pero expiración pensada para sesiones largas (~1h)
+// Limpieza cada minuto
 const TORRENT_CLEANUP_INTERVAL_MS = 60 * 1000;      // 1 minuto
-const TORRENT_EXPIRATION_MS = 60 * 60 * 1000;       // 60 minutos
-const TORRENT_READY_TIMEOUT_MS = 60 * 1000;         // 60 segundos para que el torrent esté listo
+const TORRENT_EXPIRATION_MS = 60 * 1000;       // 1 minuto
+const TORRENT_READY_TIMEOUT_MS = 60 * 1000;         // 1 minuto para que el torrent esté listo
 
 /**
  * TorrentService
