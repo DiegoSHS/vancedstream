@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { unlinkSync } from 'fs';
 import { LoggerService } from '../common/logger/logger.service.js';
 import WebTorrent, { Torrent } from 'webtorrent';
+import { HTTP_TRACKERS, UDP_TRACKERS, WSS_TRACKERS } from '../constants.js';
+import Redis from 'ioredis';
+import { TrackerCacheService } from './tracker-cache.service.js';
 
 interface TorrentUsageEntry {
   lastUsedAt: number;
@@ -24,8 +27,10 @@ export class TorrentService {
     TORRENT_CLEANUP_INTERVAL_MS,
   );
   private readonly client = new WebTorrent({ maxConns: 40 });
-
-  constructor(private readonly logger: LoggerService) {
+  constructor(
+    private readonly logger: LoggerService,
+    private readonly trackerCache: TrackerCacheService
+  ) {
     this.client.on('error', (err) => {
       this.logger.error('WebTorrent client error', err, 'TorrentService');
     });
@@ -65,17 +70,15 @@ export class TorrentService {
    * Add a torrent and wait for it to be ready
    * Configures sequential strategy and multiple trackers
   */
-  addTorrent(magnet: string): Promise<Torrent> {
+  async addTorrent(magnet: string): Promise<Torrent> {
     const { trackers } = this.extractInfo(magnet)
-    console.log(trackers.length)
+    await this.trackerCache.addTrackersFromArray(trackers)
+    const redisTrackers = await this.trackerCache.getAllTrackers();
     return new Promise((resolve, reject) => {
       this.client.add(magnet, {
         strategy: 'sequential',
         announce: [
-          'udp://tracker.opentrackr.org:1337',
-          'udp://opentor.org:2710',
-          'udp://open.stealth.si:80',
-          ...trackers
+          ...redisTrackers
         ]
       }, (torrent) => {
         this.logger.info(`Torrent added and ready: ${torrent.infoHash}`);
