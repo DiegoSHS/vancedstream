@@ -2,8 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { unlinkSync } from 'fs';
 import { LoggerService } from '../common/logger/logger.service.js';
 import WebTorrent, { Torrent } from 'webtorrent';
-import { HTTP_TRACKERS, UDP_TRACKERS, WSS_TRACKERS } from '../constants.js';
-import Redis from 'ioredis';
 import { TrackerCacheService } from './tracker-cache.service.js';
 
 interface TorrentUsageEntry {
@@ -12,7 +10,7 @@ interface TorrentUsageEntry {
 
 // Limpieza cada minuto
 const TORRENT_CLEANUP_INTERVAL_MS = 60 * 1000;      // 1 minuto
-const TORRENT_EXPIRATION_MS = 60 * 1000;       // 1 minuto
+const TORRENT_EXPIRATION_MS = 10 * 60 * 1000;       // 10 minutos
 const TORRENT_READY_TIMEOUT_MS = 60 * 1000;         // 1 minuto para que el torrent esté listo
 
 /**
