@@ -1,9 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { unlinkSync } from 'fs';
 import { LoggerService } from '../common/logger/logger.service.js';
 import WebTorrent, { Torrent } from 'webtorrent';
 import { TrackerCacheService } from './tracker-cache.service.js';
-
 interface TorrentUsageEntry {
   lastUsedAt: number;
 }
@@ -18,21 +17,48 @@ const TORRENT_READY_TIMEOUT_MS = 60 * 1000;         // 1 minuto para que el torr
  * Responsibility: Manage torrent lifecycle (add, get, remove, cleanup)
  */
 @Injectable()
-export class TorrentService {
-  private readonly usageMap: Map<string, TorrentUsageEntry> = new Map();
+export class TorrentService extends WebTorrent implements OnModuleInit, OnModuleDestroy {
+  constructor(
+    private readonly logger: LoggerService,
+    private readonly trackerCache: TrackerCacheService,
+  ) {
+    super({ maxConns: 40 });
+    this.on('error', (err) => {
+      this.logger.error('WebTorrent instance error', err, 'TorrentService');
+    });
+  }
   private readonly cleanupInterval = setInterval(
     () => this.cleanupOldTorrents(),
     TORRENT_CLEANUP_INTERVAL_MS,
-  );
-  private readonly client = new WebTorrent({ maxConns: 40 });
-  constructor(
-    private readonly logger: LoggerService,
-    private readonly trackerCache: TrackerCacheService
-  ) {
-    this.client.on('error', (err) => {
-      this.logger.error('WebTorrent client error', err, 'TorrentService');
+  )
+  private readonly usageMap: Map<string, TorrentUsageEntry> = new Map()
+
+  onModuleInit() {
+    this.logger.info('TorrentService initialized', 'TorrentService');
+  }
+
+  onModuleDestroy() {
+    clearInterval(this.cleanupInterval);
+    this.destroy((err) => {
+      if (err) {
+        this.logger.error('Error destroying TorrentService', err, 'TorrentService');
+      } else {
+        this.logger.info('TorrentService destroyed successfully', 'TorrentService');
+      }
     });
   }
+  /**
+   * Source - https://stackoverflow.com/a/19707059
+   * Posted by Jimbo, modified by community.
+   * See post 'Timeline' for change history
+   * Retrieved 2026-04-02, License - CC BY-SA 4.0
+   */
+  magnetRegExp = /magnet:\?xt=urn:[a-z0-9]+:[a-z0-9]{32}/i
+
+  checkMagnet(magnet: string) {
+    return magnet.match(this.magnetRegExp)
+  }
+
   extractInfo(magnetLink) {
     const urlParams = new URLSearchParams(magnetLink.split('?')[1]);
 
@@ -52,11 +78,11 @@ export class TorrentService {
     }
   }
   /**
- * Get existing torrent by magnet link, or null if not exists
+ * Get existing torrent by hash, or null if not exists
  */
-  async getTorrent(magnet: string): Promise<Torrent | null> {
+  async getTorrent(hash: string): Promise<Torrent | null> {
     try {
-      const torrent = this.client.get(magnet) as unknown as Torrent | null;
+      const torrent = this.get(hash) as unknown as Torrent | null;
       if (!torrent) return null;
       return torrent as Torrent;
     } catch {
@@ -68,34 +94,35 @@ export class TorrentService {
    * Add a torrent and wait for it to be ready
    * Configures sequential strategy and multiple trackers
   */
-  async addTorrent(magnet: string): Promise<Torrent> {
-    const { trackers } = this.extractInfo(magnet)
-    await this.trackerCache.addTrackersFromArray(trackers)
+  async addTorrent(hash: string): Promise<Torrent> {
+    const isMagnet = this.checkMagnet(hash)
+    if (isMagnet) {
+      const { trackers } = this.extractInfo(hash)
+      await this.trackerCache.addTrackersFromArray(trackers)
+      this.logger.info(`Added ${trackers.length} trackers from magnet link`, 'TorrentService');
+    }
     const redisTrackers = await this.trackerCache.getAllTrackers();
     return new Promise((resolve, reject) => {
-      this.client.add(magnet, {
+      this.add(hash, {
         strategy: 'sequential',
-        announce: [
-          ...redisTrackers
-        ]
+        announce: redisTrackers
       }, (torrent) => {
         this.logger.info(`Torrent added and ready: ${torrent.infoHash}`);
-        this.markTorrentAsUsed(magnet);
+        this.markTorrentAsUsed(hash);
         resolve(torrent);
       });
     });
   }
-
   /**
    * Get existing torrent or add if not exists
    * Returns torrent with 60s timeout
    */
-  async getOrAddTorrent(magnet: string): Promise<Torrent> {
-    this.markTorrentAsUsed(magnet);
-    const torrent = await this.getTorrent(magnet);
+  async getOrAddTorrent(hash: string): Promise<Torrent> {
+    this.markTorrentAsUsed(hash);
+    const torrent = await this.getTorrent(hash);
     if (torrent) return torrent;
     return await Promise.race([
-      this.addTorrent(magnet),
+      this.addTorrent(hash),
       new Promise<Torrent>((_, reject) =>
         setTimeout(
           () => reject(new Error('Timeout: Torrent not ready')),
@@ -108,8 +135,8 @@ export class TorrentService {
   /**
    * Mark torrent as used (update timestamp in usageMap)
    */
-  markTorrentAsUsed(magnet: string) {
-    this.usageMap.set(magnet, { lastUsedAt: Date.now() });
+  markTorrentAsUsed(hash: string) {
+    this.usageMap.set(hash, { lastUsedAt: Date.now() });
   }
 
   /**
@@ -117,10 +144,10 @@ export class TorrentService {
    */
   cleanupOldTorrents() {
     const now = Date.now();
-    for (const [magnet, usage] of this.usageMap.entries()) {
+    for (const [hash, usage] of this.usageMap.entries()) {
       if (now - usage.lastUsedAt > TORRENT_EXPIRATION_MS) {
-        this.logger.info(`Cleaning up expired torrent: ${magnet}`, 'TorrentService');
-        this.removeTorrent(magnet);
+        this.logger.info(`Cleaning up expired torrent: ${hash}`, 'TorrentService');
+        this.removeTorrent(hash);
       }
     }
   }
@@ -128,16 +155,16 @@ export class TorrentService {
   /**
    * Remove torrent from client and usageMap, delete temporary files
    */
-  async removeTorrent(magnet: string): Promise<void> {
+  async removeTorrent(hash: string): Promise<void> {
     let torrent: Torrent | null;
     try {
-      torrent = this.client.get(magnet) as unknown as Torrent | null;
+      torrent = this.get(hash) as unknown as Torrent | null;
     } catch {
       torrent = null;
     }
     if (torrent) {
       const files = torrent.files?.map(f => f.path) || [];
-      this.client.remove(magnet, {}, (err) => {
+      this.remove(hash, {}, (err) => {
         if (err) {
           this.logger.error('Error removing torrent', err, 'TorrentService');
         } else {
@@ -152,6 +179,6 @@ export class TorrentService {
         }
       });
     }
-    this.usageMap.delete(magnet);
+    this.usageMap.delete(hash);
   }
 }

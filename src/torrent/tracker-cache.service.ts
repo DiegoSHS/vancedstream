@@ -11,26 +11,26 @@ import { HTTP_TRACKERS, UDP_TRACKERS, WSS_TRACKERS } from '../constants.js';
  */
 @Injectable()
 export class TrackerCacheService extends Redis implements OnModuleInit, OnModuleDestroy {
-  private readonly TRACKERS_KEY = 'torrent:trackers';
+    private readonly TRACKERS_KEY = 'torrent:trackers';
 
-  constructor(private readonly logger: LoggerService) {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    constructor(private readonly logger: LoggerService) {
+        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
-    super(redisUrl, {
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-    });
+        super(redisUrl, {
+            retryStrategy: (times) => {
+                const delay = Math.min(times * 50, 2000);
+                return delay;
+            },
+        });
 
-    this.on('error', (err) => {
-      this.logger.error('Redis connection error', err, 'TrackerCacheService');
-    });
+        this.on('error', (err) => {
+            this.logger.error('Redis connection error', err, 'TrackerCacheService');
+        });
 
-    this.on('connect', () => {
-      this.logger.info('Redis connected', 'TrackerCacheService');
-    });
-  }
+        this.on('connect', () => {
+            this.logger.info('Redis connected', 'TrackerCacheService');
+        });
+    }
 
     /**
      * Initialize tracker cache on module startup
@@ -99,9 +99,9 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
     /**
      * Get all trackers from cache
      */
-    async getAllTrackers(): Promise<string[]> {
+    getAllTrackers() {
         try {
-            return await this.smembers(this.TRACKERS_KEY);
+            return this.smembers(this.TRACKERS_KEY);
         } catch (error) {
             this.logger.error('Error getting all trackers', error, 'TrackerCacheService');
             throw error;
@@ -111,9 +111,9 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
     /**
      * Get tracker count
      */
-    async getTrackerCount(): Promise<number> {
+    getTrackerCount() {
         try {
-            return await this.scard(this.TRACKERS_KEY);
+            return this.scard(this.TRACKERS_KEY);
         } catch (error) {
             this.logger.error('Error getting tracker count', error, 'TrackerCacheService');
             throw error;
@@ -136,12 +136,28 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
     /**
      * Clear all trackers from cache
      */
-    async clearAll(): Promise<void> {
+    clearAll() {
         try {
-            await this.del(this.TRACKERS_KEY);
+            this.del(this.TRACKERS_KEY);
             this.logger.info('Tracker cache cleared', 'TrackerCacheService');
         } catch (error) {
             this.logger.error('Error clearing tracker cache', error, 'TrackerCacheService');
+            throw error;
+        }
+    }
+    setTorrentHash(movieId: string, hash: string) {
+        try {
+            return this.set(movieId, hash);
+        } catch (error) {
+            this.logger.error(`Error setting hash for movie: ${movieId}`, error, 'TrackerCacheService');
+            throw error;
+        }
+    }
+    getTorrentHash(movieId: string) {
+        try {
+            return this.get(movieId);
+        } catch (error) {
+            this.logger.error(`Error getting hash for movie: ${movieId}`, error, 'TrackerCacheService');
             throw error;
         }
     }
