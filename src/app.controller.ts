@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Query, StreamableFile, Res } from '@nestjs/common';
+import { Controller, Get, Headers, Query, StreamableFile, Res, Post, Body, BadRequestException, ValidationPipe } from '@nestjs/common';
 import { Readable } from 'stream';
 import { TorrentService } from './torrent/torrent.service.js';
 import { StreamService } from './stream/stream.service.js';
@@ -6,6 +6,8 @@ import { Torrent } from 'webtorrent';
 import { LoggerService } from './common/logger/logger.service.js';
 import type { FastifyReply } from 'fastify';
 import { ThePBService } from './thepb/thepb.service.js';
+import { TrackerCacheService } from './torrent/tracker-cache.service.js';
+import { SaveHashDto } from './torrent/dto/save-hash.dto.js';
 
 /**
  * AppController
@@ -17,7 +19,8 @@ export class AppController {
     private readonly torrentService: TorrentService,
     private readonly streamService: StreamService,
     private readonly logger: LoggerService,
-    private readonly TPBService: ThePBService
+    private readonly TPBService: ThePBService,
+    private readonly trackerCache: TrackerCacheService
   ) { }
 
   /**
@@ -104,5 +107,19 @@ export class AppController {
     @Query('title') title: string
   ) {
     return this.TPBService.getTPBMovies(title)
+  }
+  @Post('/save_hash')
+  async saveMovieHash(
+    @Body() body: SaveHashDto
+  ) {
+    if (!body.name || !body.hash) {
+      this.logger.warn('Missing id or hash in request body', 'AppController');
+      throw new BadRequestException('Both id and hash are required')
+    }
+    return this.trackerCache.setTorrentHash(body.name, body.hash)
+  }
+  @Get('/get_hashes')
+  getMovieHashes() {
+    return this.trackerCache.getTorrentHashes()
   }
 }

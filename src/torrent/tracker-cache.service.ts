@@ -1,7 +1,8 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import Redis from 'ioredis';
 import { LoggerService } from '../common/logger/logger.service.js';
 import { HTTP_TRACKERS, UDP_TRACKERS, WSS_TRACKERS } from '../constants.js';
+import { SaveHashDto } from './dto/save-hash.dto.js';
 
 /**
  * TrackerCacheService
@@ -12,6 +13,7 @@ import { HTTP_TRACKERS, UDP_TRACKERS, WSS_TRACKERS } from '../constants.js';
 @Injectable()
 export class TrackerCacheService extends Redis implements OnModuleInit, OnModuleDestroy {
     private readonly TRACKERS_KEY = 'torrent:trackers';
+    private readonly HASHES_KEY = 'torrent:hashes'
 
     constructor(private readonly logger: LoggerService) {
         const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -77,7 +79,7 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
             return added > 0;
         } catch (error) {
             this.logger.error(`Error adding tracker: ${tracker}`, error, 'TrackerCacheService');
-            throw error;
+            throw new InternalServerErrorException('Failed to add tracker to cache');
         }
     }
 
@@ -92,7 +94,7 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
             return added;
         } catch (error) {
             this.logger.error('Error adding trackers from array', error, 'TrackerCacheService');
-            throw error;
+            throw new InternalServerErrorException('Failed to add trackers from array');
         }
     }
 
@@ -104,7 +106,7 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
             return this.smembers(this.TRACKERS_KEY);
         } catch (error) {
             this.logger.error('Error getting all trackers', error, 'TrackerCacheService');
-            throw error;
+            throw new InternalServerErrorException('Failed to get trackers from cache');
         }
     }
 
@@ -116,7 +118,7 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
             return this.scard(this.TRACKERS_KEY);
         } catch (error) {
             this.logger.error('Error getting tracker count', error, 'TrackerCacheService');
-            throw error;
+            throw new InternalServerErrorException('Failed to get tracker count');
         }
     }
 
@@ -129,7 +131,7 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
             return removed > 0;
         } catch (error) {
             this.logger.error(`Error removing tracker: ${tracker}`, error, 'TrackerCacheService');
-            throw error;
+            throw new InternalServerErrorException('Failed to remove tracker from cache');
         }
     }
 
@@ -142,23 +144,35 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
             this.logger.info('Tracker cache cleared', 'TrackerCacheService');
         } catch (error) {
             this.logger.error('Error clearing tracker cache', error, 'TrackerCacheService');
-            throw error;
+            throw new InternalServerErrorException('Failed to clear tracker cache');
         }
     }
-    setTorrentHash(movieId: string, hash: string) {
+    async setTorrentHash(name: string, hash: string) {
         try {
-            return this.set(movieId, hash);
+            const value = JSON.stringify({
+                name,
+                hash,
+            })
+            const res = await this.sadd(this.HASHES_KEY, value);
+            this.logger.info(`Hash ${hash} for movie ${name} set successfully`, 'TrackerCacheService');
+            return res;
         } catch (error) {
-            this.logger.error(`Error setting hash for movie: ${movieId}`, error, 'TrackerCacheService');
-            throw error;
+            this.logger.error(`Error setting hash for movie: ${name}`, error, 'TrackerCacheService');
+            throw new InternalServerErrorException(`Failed to set hash for movie: ${name}`);
         }
     }
-    getTorrentHash(movieId: string) {
+    async getTorrentHashes() {
         try {
-            return this.get(movieId);
+            const hashes = await this.smembers(this.HASHES_KEY);
+            if (!hashes.length) {
+                this.logger.warn(`No hashes found`, 'TrackerCacheService');
+                return []
+            }
+            const parsedResults = hashes.map<SaveHashDto>(hash => JSON.parse(hash))
+            return parsedResults;
         } catch (error) {
-            this.logger.error(`Error getting hash for movie: ${movieId}`, error, 'TrackerCacheService');
-            throw error;
+            this.logger.error(`Error getting hashes`, error, 'TrackerCacheService');
+            throw new InternalServerErrorException(`Failed to get hashes`);
         }
     }
 }
