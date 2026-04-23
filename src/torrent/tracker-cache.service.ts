@@ -41,20 +41,18 @@ export class TrackerCacheService extends Redis implements OnModuleInit, OnModule
     async onModuleInit() {
         try {
             const exists = await this.exists(this.TRACKERS_KEY);
-
-            if (!exists) {
-                this.logger.info('Initializing tracker cache with default trackers', 'TrackerCacheService');
-                await this.addTrackersFromArray([
-                    ...HTTP_TRACKERS,
-                    ...UDP_TRACKERS,
-                    ...WSS_TRACKERS,
-                ]);
-                const count = await this.scard(this.TRACKERS_KEY);
-                this.logger.info(`Tracker cache initialized with ${count} trackers`, 'TrackerCacheService');
-            } else {
-                const count = await this.scard(this.TRACKERS_KEY);
-                this.logger.info(`Tracker cache already exists with ${count} trackers`, 'TrackerCacheService');
+            const count = exists ? await this.scard(this.TRACKERS_KEY) : 0
+            const trackers = [
+                ...HTTP_TRACKERS,
+                ...UDP_TRACKERS,
+                ...WSS_TRACKERS,
+            ]
+            if (count < trackers.length) {
+                await this.addTrackersFromArray(trackers);
             }
+            this.logger.info('Initializing tracker cache with default trackers', 'TrackerCacheService');
+            const updatedCount = await this.scard(this.TRACKERS_KEY)
+            this.logger.info(`Tracker cache initialized with ${updatedCount} trackers`, 'TrackerCacheService');
         } catch (error) {
             this.logger.error('Error initializing tracker cache', error, 'TrackerCacheService');
             throw error;
