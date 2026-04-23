@@ -5,6 +5,11 @@
 
 export const WEBTORRENT = 'WebTorrent'
 
+// Torrent lifecycle constants - optimized for memory
+export const TORRENT_CLEANUP_INTERVAL_MS = 30 * 1000;      // 30 segundos (cleanup más frecuente)
+export const TORRENT_EXPIRATION_MS = 5 * 60 * 1000;        // 5 minutos (expiración más rápida)
+export const TORRENT_READY_TIMEOUT_MS = 60 * 1000;         // 1 minuto para que el torrent esté listo
+
 export const STREAM_CONFIG = {
     // Progressive streaming buffer thresholds
     progressiveBufferThresholds: {
@@ -40,7 +45,7 @@ export const STREAM_CONFIG = {
 
     // Check intervals
     intervals: {
-        bufferCheck: 100, // 100ms
+        bufferCheck: 500, // 500ms
     },
 } as const;
 

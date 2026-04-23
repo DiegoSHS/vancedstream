@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Query, StreamableFile, Res, Post, Body, BadRequestException, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Headers, Query, Res, Post, Body, BadRequestException } from '@nestjs/common';
 import { Readable } from 'stream';
 import { TorrentService } from './torrent/torrent.service.js';
 import { StreamService } from './stream/stream.service.js';
@@ -36,10 +36,7 @@ export class AppController {
     @Headers('range') range: string,
     @Res({ passthrough: true }) res: FastifyReply,
   ) {
-    if (!magnet) {
-      return { message: 'Magnet link is required' };
-    }
-
+    if (!magnet) return new BadRequestException('Magnet link or hash required')
     try {
       const startTime = Date.now();
 
@@ -74,12 +71,24 @@ export class AppController {
       // Configure HTTP status and range headers for efficient streaming
       const chunkSize = metadata.chunkSize;
 
-      res.status(206);
-      res.headers({
-        "accept-ranges": "bytes",
-        "content-range": `bytes ${metadata.start}-${metadata.end}/${metadata.fileSize}`,
-        "content-length": chunkSize.toString()
-      })
+      res.status(206)
+        .headers({
+          "accept-ranges": "bytes",
+          "content-range": `bytes ${metadata.start}-${metadata.end}/${metadata.fileSize}`,
+          "content-length": chunkSize.toString(),
+          "content-type": metadata.mimeType,
+          "content-disposition": `inline; filename="${metadata.fileName}"`
+        })
+      // Return stream directly for better backpressure handling
+      // Fastify will manage buffering based on client speed
+      stream.on('error', (err) => {
+        this.logger.error('Stream error during transmission', err, 'AppController');
+      });
+
+      stream.on('pause', () => {
+        this.logger.debug('Stream paused - client is slow');
+      });
+
       const totalTime = Date.now() - startTime;
       this.logger.info(
         `✓ STREAM | ` +
@@ -91,11 +100,7 @@ export class AppController {
         'AppController',
       );
 
-      return new StreamableFile(stream as Readable, {
-        type: metadata.mimeType,
-        disposition: `inline; filename="${metadata.fileName}"`,
-        length: chunkSize,
-      });
+      return stream;
     } catch (error: any) {
       this.logger.error('Stream error', error, 'AppController');
       return { message: error?.message || 'Stream error' };

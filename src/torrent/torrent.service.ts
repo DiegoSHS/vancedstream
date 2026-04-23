@@ -3,14 +3,15 @@ import { unlinkSync } from 'fs';
 import { LoggerService } from '../common/logger/logger.service.js';
 import WebTorrent, { Torrent } from 'webtorrent';
 import { TrackerCacheService } from './tracker-cache.service.js';
+import { TORRENT_CLEANUP_INTERVAL_MS, TORRENT_EXPIRATION_MS, TORRENT_READY_TIMEOUT_MS } from '../constants.js';
+
 interface TorrentUsageEntry {
   lastUsedAt: number;
 }
 
-// Limpieza cada minuto
-const TORRENT_CLEANUP_INTERVAL_MS = 60 * 1000;      // 1 minuto
-const TORRENT_EXPIRATION_MS = 10 * 60 * 1000;       // 10 minutos
-const TORRENT_READY_TIMEOUT_MS = 60 * 1000;         // 1 minuto para que el torrent esté listo
+// Memory optimization: maximum concurrent torrents
+const MAX_TORRENTS_CACHE = 3;     // Máximo 3 torrents en caché simultáneamente
+const MEMORY_THRESHOLD_MB = 500;  // Trigger cleanup si supera 500MB
 
 /**
  * TorrentService
@@ -22,7 +23,11 @@ export class TorrentService extends WebTorrent implements OnModuleInit, OnModule
     private readonly logger: LoggerService,
     private readonly trackerCache: TrackerCacheService,
   ) {
-    super({ maxConns: 40 });
+    super({
+      maxConns: 10,                          // Reducido de 40 - menos overhead de conexiones
+      downloadLimit: 5 * 1024 * 1024,       // 5MB/s máximo
+      uploadLimit: 1 * 1024 * 1024,         // 1MB/s máximo
+    });
     this.on('error', (err) => {
       this.logger.error('WebTorrent instance error', err, 'TorrentService');
     });
@@ -35,6 +40,18 @@ export class TorrentService extends WebTorrent implements OnModuleInit, OnModule
 
   onModuleInit() {
     this.logger.info('TorrentService initialized', 'TorrentService');
+
+    // Memory monitoring: cleanup if threshold exceeded
+    setInterval(() => {
+      const heapUsed = process.memoryUsage().heapUsed / 1024 / 1024;
+      if (heapUsed > MEMORY_THRESHOLD_MB) {
+        this.logger.warn(
+          `High memory usage: ${heapUsed.toFixed(2)}MB - Triggering aggressive cleanup`,
+          'TorrentService'
+        );
+        this.cleanupOldTorrents();
+      }
+    }, 10 * 1000);  // Revisar cada 10 segundos
   }
 
   onModuleDestroy() {
@@ -92,7 +109,7 @@ export class TorrentService extends WebTorrent implements OnModuleInit, OnModule
 
   /**
    * Add a torrent and wait for it to be ready
-   * Configures sequential strategy and multiple trackers
+   * Configures sequential strategy, multiple trackers, and memory cache limits
   */
   async addTorrent(hash: string): Promise<Torrent> {
     const isMagnet = this.checkMagnet(hash)
@@ -105,7 +122,8 @@ export class TorrentService extends WebTorrent implements OnModuleInit, OnModule
     return new Promise((resolve, reject) => {
       this.add(hash, {
         strategy: 'sequential',
-        announce: redisTrackers
+        announce: redisTrackers,
+        storeCacheSlots: 5  // Limita caché en memoria a 5 piezas (default=20, -75% RAM)
       }, (torrent) => {
         this.logger.info(`Torrent added and ready: ${torrent.infoHash}`);
         this.markTorrentAsUsed(hash);
@@ -116,11 +134,28 @@ export class TorrentService extends WebTorrent implements OnModuleInit, OnModule
   /**
    * Get existing torrent or add if not exists
    * Returns torrent with 60s timeout
+   * Enforces maximum pool size to prevent memory bloat
    */
   async getOrAddTorrent(hash: string): Promise<Torrent> {
     this.markTorrentAsUsed(hash);
+
+    // Enforce maximum torrents in cache
+    if (this.usageMap.size > MAX_TORRENTS_CACHE) {
+      const oldest = Array.from(this.usageMap.entries())
+        .sort((a, b) => a[1].lastUsedAt - b[1].lastUsedAt)[0];
+
+      if (oldest && oldest[0] !== hash) {
+        this.logger.info(
+          `Pool limit reached (${this.usageMap.size}/${MAX_TORRENTS_CACHE}) - removing oldest: ${oldest[0].slice(0, 8)}...`,
+          'TorrentService'
+        );
+        await this.removeTorrent(oldest[0]);
+      }
+    }
+
     const torrent = await this.getTorrent(hash);
     if (torrent) return torrent;
+
     return await Promise.race([
       this.addTorrent(hash),
       new Promise<Torrent>((_, reject) =>
@@ -146,7 +181,7 @@ export class TorrentService extends WebTorrent implements OnModuleInit, OnModule
     const now = Date.now();
     for (const [hash, usage] of this.usageMap.entries()) {
       if (now - usage.lastUsedAt > TORRENT_EXPIRATION_MS) {
-        this.logger.info(`Cleaning up expired torrent: ${hash}`, 'TorrentService');
+        this.logger.info(`Cleaning up expired torrent`, 'TorrentService');
         this.removeTorrent(hash);
       }
     }
