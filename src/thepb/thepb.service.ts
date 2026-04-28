@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { Torrent, TPBMovie } from "./dto/movie.dto.js";
 import { LoggerService } from "../common/logger/logger.service.js";
-import { formatBytes, getQualityFromName, parseSeedPeers } from "./utils/thepb.utils.js";
+import { formatBytes, getQualityFromName, parseName, parseSeedPeers } from "./utils/thepb.utils.js";
 
 @Injectable()
 export class ThePBService {
@@ -25,8 +25,8 @@ export class ThePBService {
             type: input.name
         }
     }
-    filterTorrents(torrent: Torrent) {
-        return torrent.seeds > 0 && torrent.peers > 0
+    filterTorrentsBySeeding(torrent: Torrent) {
+        return torrent.seeds > 2 && torrent.peers > 2
     }
     async getTPBMovies(title: string) {
         try {
@@ -40,9 +40,12 @@ export class ThePBService {
                 this.logger.info("No torrents found", "ThePBService")
                 return []
             }
+            const parsedTitle = title.replace(/\:/, '').toLowerCase()
+            console.log(parseName(data[0].name), parsedTitle)
             const filtered = data
                 .map(this.TPBtoTorrent)
-                .filter(this.filterTorrents)
+                .filter(this.filterTorrentsBySeeding)
+                .filter(item => parseName(item.type) === parsedTitle)
             this.logger.info(`${filtered.length} torrents found`, "ThePBService")
             return filtered
         } catch (error) {

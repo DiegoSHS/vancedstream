@@ -17,3 +17,11 @@ export const getQualityFromName = (name: string) => {
 export const parseSeedPeers = (input: string) => {
     return parseInt(input) || 0
 }
+
+export const parseName = (name: string) => name
+    .toLowerCase()
+    .split(/(\d{3,4}p)/)[0]
+    .replace(/\./g, ' ')
+    .split(/\d{3,4}/)[0]
+    .replace(/\(/g, '')
+    .trim()
